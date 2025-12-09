@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Autopublish – Prototyp_Szmal</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header>
+    <h1>Autopublish – Surreal Micro Sketch Pipeline</h1>
+  </header>
+  <main>
+    <div class="card">
+      <h2>Run full pipeline</h2>
+      <p>This will:
+        <br />1) Pull live / AI trends
+        <br />2) Write a surreal micro-sketch
+        <br />3) Generate multiple Sora clips (15–30s total)
+        <br />4) Add glitch FX, narration, optional SFX
+        <br />5) Create title, description, hashtags
+        <br />6) Optionally upload draft to TikTok.</p>
+      <label>
+        Niche / theme
+        <input id="niche" value="AI NPCs, office glitches, surreal memes" />
+      </label>
+      <br /><br />
+      <button id="runBtn">Run once</button>
+      <p id="status"></p>
+      <pre id="log"></pre>
+    </div>
+  </main>
+  <script>
+    const runBtn = document.getElementById("runBtn");
+    const statusEl = document.getElementById("status");
+    const logEl = document.getElementById("log");
+
+    runBtn.onclick = async () => {
+      runBtn.disabled = true;
+      statusEl.textContent = "Running full pipeline...";
+      logEl.textContent = "";
+      try {
+        const niche = document.getElementById("niche").value;
+        const resp = await fetch("/api/autopublish/run-once", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ niche })
+        });
+        const json = await resp.json();
+        statusEl.textContent = json.ok ? "Done" : "Error";
+        logEl.textContent = JSON.stringify(json, null, 2);
+      } catch (e) {
+        statusEl.textContent = "Error";
+        logEl.textContent = String(e);
+      } finally {
+        runBtn.disabled = false;
+      }
+    };
+  </script>
+</body>
+</html>
