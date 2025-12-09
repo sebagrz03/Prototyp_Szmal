@@ -31,9 +31,38 @@ function planSegments(minSec, maxSec) {
   return { segments, total };
 }
 
+async function generateClipsWithConcurrency(scenes, segments, concurrency) {
+  const clips = [];
+  const pending = [];
+  
+  for (let i = 0; i < scenes.length; i++) {
+    const scene = scenes[i];
+    const soraPrompt = buildSoraPromptForScene(scene, null);
+    const segDuration = segments[Math.min(scene.id - 1, segments.length - 1)] || 8;
+    
+    const promise = generateSoraClip({
+      promptText: soraPrompt,
+      seconds: segDuration,
+    }).then(clip => ({ index: i, clip }));
+    
+    pending.push(promise);
+    
+    if (pending.length >= concurrency || i === scenes.length - 1) {
+      const results = await Promise.all(pending);
+      results.forEach(({ index, clip }) => {
+        clips[index] = clip.filePath;
+      });
+      pending.length = 0;
+    }
+  }
+  
+  return clips;
+}
+
 export async function runAutopublishOnce({ niche }) {
   const minSec = Number(process.env.VIDEO_TARGET_MIN_SECONDS || 15);
   const maxSec = Number(process.env.VIDEO_TARGET_MAX_SECONDS || 30);
+  const soraMaxConcurrency = Number(process.env.SORA_MAX_CONCURRENCY || 1);
 
   console.log("[ORCH] 1) trends");
   const trends = await fetchLiveOrAiTrends({ niche });
@@ -48,16 +77,11 @@ export async function runAutopublishOnce({ niche }) {
   const scenePlan = await buildScenePlan({ storyOutline, targetSeconds: approxSeconds });
 
   console.log("[ORCH] 4) Sora clips");
-  const soraClips = [];
-  for (const scene of scenePlan.scenes || []) {
-    const soraPrompt = buildSoraPromptForScene(scene, null);
-    const segDuration = segments[Math.min(scene.id - 1, segments.length - 1)] || 8;
-    const clip = await generateSoraClip({
-      promptText: soraPrompt,
-      seconds: segDuration,
-    });
-    soraClips.push(clip.filePath);
-  }
+  const soraClips = await generateClipsWithConcurrency(
+    scenePlan.scenes || [],
+    segments,
+    soraMaxConcurrency
+  );
 
   console.log("[ORCH] 5) merge video + glitch FX");
   const mergedVideoPath = await mergeVideoClips(soraClips, { applyGlitchFx: true });
